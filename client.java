@@ -212,12 +212,12 @@ public class Client {
 		String ServerInfo = "";
 
 		for (Server server: servers) {
-
+            int coreReq =  server.getCores() - job.get(0).getCoreReq();
 			// find best fit for job
 			if (// server.getDisk() >= job.get(0).getDiskReq() &&
 				server.getCores() >= job.get(0).getCoreReq() &&
-				//server.getMemory() >= job.get(0).getMemoryReq() &&  
-				 job.get(0).getStartTime() >= job.get(0).getRunTime()) {
+				server.getMemory() >= job.get(0).getMemoryReq()){ 
+			//	 job.get(0).getStartTime() >= job.get(0).getRunTime()) {
 					// Ensure the server is already active or idle to reduce cost
 					ServerInfo = server.getType() + " " + server.getID();
 					return "SCHD " + job.get(0).getID() + " " + ServerInfo;
