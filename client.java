@@ -116,15 +116,15 @@ public class Client {
 
     // Finds the largest server; counts through cores until largest is found then
     // returns largest
-    private int findLargestServer(ArrayList<Server> s) {
-        int largest = 0;
-        for (int i = 0; i < s.size(); i++) {
-            if (s.get(i).getCores() > largest) {
-                largest = i;
-            }
-        }
-        return largest;
-    }
+    // private int findLargestServer(ArrayList<Server> s) {
+    //     int largest = 0;
+    //     for (int i = 0; i < s.size(); i++) {
+    //         if (s.get(i).getCores() > largest) {
+    //             largest = i;
+    //         }
+    //     }
+    //     return largest;
+    // }
 
     // Send message to server
     private void sendMessage(String outStr) {
@@ -132,7 +132,7 @@ public class Client {
         try {
             out.write(byteMsg);
         } catch (IOException e) {
-            e.printStackTrace();
+         //   e.printStackTrace();
         }
 
         // Display output from client
@@ -146,7 +146,7 @@ public class Client {
         try {
             in.read(cbuf);
         } catch (IOException e) {
-            e.printStackTrace();
+        //    e.printStackTrace();
         }
         inStr = new String(cbuf, 0, cbuf.length);
 
@@ -206,54 +206,32 @@ public class Client {
         return ("GETS Capable " + j.getCoreReq() + " " + j.getMemoryReq() + " " + j.getDiskReq());
     }
 
-    // public String lowCost(ArrayList<Server> servers, ArrayList<Job> job){
+    public String lowCost(ArrayList<Server> servers, ArrayList<Job> job){
 
-	// 	// Server information string
-	// 	String ServerInfo = "";
+		// Server information string
+		String ServerInfo = "";
 
-	// 	for (Server server: servers) {
+		for (Server server: servers) {
 
-	// 		// find best fit for job
-	// 		if (server.getDisk() >= job.get(0).getDiskReq() &&
-	// 			server.getCores() >= job.get(0).getCoreReq() &&
-	// 			server.getMemory() >= job.get(0).getMemoryReq() &&
-	// 			// Ensure start time is greater than runnning time
-	// 			job.get(0).getStartTime() >= job.get(0).getRunTime()) {
+			// find best fit for job
+			if (// server.getDisk() >= job.get(0).getDiskReq() &&
+				server.getCores() >= job.get(0).getCoreReq() &&
+				//server.getMemory() >= job.get(0).getMemoryReq() &&  
+				 job.get(0).getStartTime() >= job.get(0).getRunTime()) {
+					// Ensure the server is already active or idle to reduce cost
+					ServerInfo = server.getType() + " " + server.getID();
+					return "SCHD " + job.get(0).getID() + " " + ServerInfo;
+			}
+			// When there is no optimal server, just use first server.
+			else {
+				// Send job to first server
+				ServerInfo = servers.get(0).getType() + " " + servers.get(0).getID();
+			}
+		}
+		// There is only one job in queue so schedule it
+		return "SCHD " + job.get(0).getID() + " " + ServerInfo;
+	}
 
-	// 				// Ensure the server is already active or idle to reduce cost
-	// 				ServerInfo = server.getType() + " " + server.getID();
-	// 				return "SCHD " + job.get(0).getID() + " " + ServerInfo;
-	// 		}
-	// 		// When there is no optimal server, just use first server.
-	// 		else {
-	// 			// Send job to first server
-	// 			ServerInfo = servers.get(0).getType() + " " + servers.get(0).getID();
-	// 		}
-	// 	}
-	// 	// There is only one job in queue so schedule it
-	// 	return "SCHD " + job.get(0).getID() + " " + ServerInfo;
-	// }
-
-    public static Server getOptimalServer(ArrayList<Server> servers, Job job) {
-        Server optimalServer = servers.get(0);                                  // initialise optimal server to be the first element of servers
-        int lowestFitnessValue = servers.get(0).getCores() - job.getCoreReq();      // initialise the lowest fitness value to the fitness value of the first server
-
-        for(Server s : servers) {                                               // iterate through every server
-            int fitnessValue = s.getCores() - job.getCoreReq();                    // find current fitnessValue
-
-            // the optimal server will be the one with
-            // the lowest possible fitness value
-            // AND lowest possible waiting jobs
-             if(lowestFitnessValue < 0 ||
-                     (fitnessValue < lowestFitnessValue &&
-               (s.getWaitTime() < optimalServer.getWaitTime()))) {
-                        lowestFitnessValue = fitnessValue;
-                        optimalServer = s;
-            }
-        }
-
-        return optimalServer;
-    }
 
     // Establishes connection to initiate handhsake
     private static void connect(String address, int port) {
