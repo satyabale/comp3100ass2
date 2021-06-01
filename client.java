@@ -1,163 +1,286 @@
-
-import java.io.*;
 import java.net.*;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
+
+import org.w3c.dom.*;
+
+import java.io.*;
 
 public class Client {
-    private Socket socket = null; 
+    // initialize socket and input output streams
+    private static Socket socket = null;
+    private BufferedReader input = null;
+    private DataOutputStream out = null;
     private BufferedReader in = null;
-    private static  DataOutputStream out = null;
-    private static String[] messageArr; // Holds the incoming message in array by separated space " ".
-    private static HashMap<String, Server> capableServerList; // Store list of capable server/job.
-    private static String [] firstCapableServer; // Stores the first capable server/job.
 
-    // Client Commands
-    private static final String HELO = "HELO"; // Initial hello to the server
-    private static final String AUTH = "AUTH " + System.getProperty("user.name"); // Authentication detais
-    private static final String REDY = "REDY"; // Client is ready.
-    private static final String Capable = "Capable"; // request capable surver to run that job.
-    private static final String SPACE = " "; // Space
-    private static final String OK = "OK"; // OK
-    private static final String GETS = "GETS"; // request for server state information
-    private static final String SCHD = "SCHD"; // actual scheduling decision
-    private static final String QUIT = "QUIT"; // request to quit
-
-
-    public Client(String address, int port) throws Exception { // Client socket connection
-        capableServerList = new HashMap<String, Server>();
-        firstCapableServer = new String [9]; // 9 items to store
-        socket = new Socket(address, port);
-        in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+    // constructor to put ip address and port
+    public Client(String address, int port) throws IOException {
+        connect(address, port);
+        input = new BufferedReader(new InputStreamReader(System.in));
         out = new DataOutputStream(socket.getOutputStream());
+        in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
     }
 
-    public String[] readmsg() throws Exception { // Read the incoming message
+    private void start() {
+        sendMessage("HELO");
+        readMessage();
 
-        var str = in.readLine();
-        String inputMsg = str.toString();
-        messageArr = inputMsg.split("\\s+"); // split the message by space
-        return messageArr;
-    }
+        // Send user details
+        sendMessage("AUTH " + System.getProperty("user.name"));
+        readMessage();
 
-    public static  void sendMsg(String msg) throws IOException { // send message to the server
+        // handshake completed
+        boolean connected = true;
 
-        String m = msg + "\n"; // add new line character on the end of all the messages.
-        byte[] message = m.getBytes();
-        out.write(message);
-        out.flush(); 
-    }
-    public static void algorithmLowCost(Job job) throws IOException{
- 
-        for(Server server:capableServerList.values()){  // iterate list of servers and get low cost server
-            if(server.getCores() >= job.getCoreReq() &&
-                server.getMemory() >= job.getMemoryReq() &&
-                server.getDisk() >= job.getDiskReq() &&
-                job.getStartTime() >= job.getRunTime()){
-                    // if server found, schedule the job and return to calling function.
-                    Client.sendMsg(SCHD + SPACE + job.getID() + SPACE + server.getType() + SPACE + server.getID());
-                    return;
-                }
-        }
-        // if algorith cannot find the best server, assign job to the first server.
-        Client.sendMsg(SCHD + SPACE + job.getID() + SPACE + firstCapableServer[0] + SPACE + firstCapableServer[1]);
+        // populate arrayList of server objects from:
+        ArrayList<Server> servers = new ArrayList<Server>();
 
-    }
+        // arrayList for holding job info from "GETS Capable"
+        ArrayList<Job> jobs = new ArrayList<Job>();
 
-    public static void main(String[] args) {
+        // Tells client it is ready to recieve commands
+        sendMessage("REDY");
 
-        try {
+        // temp string to hold readMessage data
+        // we check the contents of this string, rather than call readMessage()
+        String msg = readMessage();
 
-            Client Client = new Client("localhost", 50000); // Create Client instance
+        // SCHEDULES JOB TO LARGEST SERVER
+        while (connected) {
+            // Job completed we tell ds-server we are ready
+            if (msg.contains("JCPL")) {
+                sendMessage("REDY");
+                msg = readMessage();
+                // there are no more jobs left
+            } else if (msg.contains("NONE")) { // there are no more jobs left
+                connected = false;
+                sendMessage("QUIT");
+            } else {
 
-            Client.sendMsg(HELO); // send Helo to the server
-
-            Client.readmsg(); // read back
-
-            Client.sendMsg(AUTH); // send username
-       
-            while (Client.readmsg()[0] != "nonsence") {
-
-                if (messageArr[0].equals(OK)) {
-                    Client.sendMsg(REDY); // send Client is ready to receive data.
+                // Get next message
+                if (msg.contains("OK")) {
+                    sendMessage("REDY");
+                    msg = readMessage();
                 }
 
-                switch (messageArr[0]) {
-                    case "JOBN": // We received a job to schedule.
+                // we have a JOB incoming, so we create a job objet based on it
+                if (msg.contains("JOBN")) {
+                    jobs.add(addJob(msg)); // create job
 
-                        /**
-                         * create a Job object and store job details.
-                         * Convert string to interger
-                        */ 
-                        Job job = new Job(Integer.parseInt(messageArr[1]),
-                                          Integer.parseInt(messageArr[2]), 
-                                          Integer.parseInt(messageArr[3]), 
-                                          Integer.parseInt(messageArr[4]),  
-                                          Integer.parseInt(messageArr[5]),
-                                          Integer.parseInt(messageArr[6]));
+                    // the job arrayList will only ever have 1 item in it at a time...
+                    sendMessage(getsCapable(jobs.get(0))); // GETS Capable called
+                    msg = readMessage();
 
-                        // Request for capable server to run the job reeived.                
-                        Client.sendMsg(GETS + SPACE 
-                                            + Capable 
-                                            + SPACE 
-                                            + job.getCoreReq() 
-                                            + SPACE 
-                                            + job.getMemoryReq()
-                                            + SPACE 
-                                            + job.getDiskReq());
-                               
-                        String[] msg = Client.readmsg(); // read the data back from gets capable
+                    sendMessage("OK");
 
-                        Client.sendMsg(OK); // Send Ok to receive the server list
+                    // list of capable servers are added to arrayList of server objects
+                    msg = readMessage();
+                    servers = addServer(msg);
+                    sendMessage("OK");
 
-                        //add the capable servers to the list
-                        for (int i = 0; i < Integer.parseInt(msg[1]); i++) {
-                            String[] server = Client.readmsg();
-                            if( i == 0){
-                                firstCapableServer = server; // store the first server
-                            }
+                    // we should receive a "." here
+                    msg = readMessage();
 
-                            Server s = new Server(server[0], 
-                                Integer.parseInt(server[1]), 
-                                                 server[2],
-                                Integer.parseInt(server[3]),
-                                Integer.parseInt(server[4]),
-                                Integer.parseInt(server[5]), 
-                                Integer.parseInt(server[6]),
-                                Integer.parseInt(server[7]), 
-                                Integer.parseInt(server[8]));
-                            capableServerList.put(server[0] + " " + server[1], s); // Add to the hashMap
+                    sendMessage(lowCost(servers, jobs)); // Scheduling algorithm called here
+                    msg = readMessage();
 
-                        }
-
-                        Client.sendMsg(OK);// ACK to the server that we have received servers.
-
-                        Client.readmsg();
-
-                        if (messageArr[0].equals(".")) { // check if we are ready to schedule
-                            algorithmLowCost(job); // call the algorithm function
-                            capableServerList.clear(); // clear the list for the next job.
-                        }
-
-                        break;
-
-                    case "JCPL":// job complete
-                        Client.sendMsg(REDY);
-
-                        break;
-
-                    case "NONE": // quit
-                        Client.sendMsg(QUIT); // send quit
-                        Client.readmsg();
-                        Client.in.close();
-                        Client.out.close();
-                        Client.socket.close();
-                        break;
+                    // only need one job at a time
+                    jobs.remove(0);
                 }
             }
+        }
 
-        } catch (
+        // close the connection
+        try {
 
-        Exception e) {
+            // QUIT hand-shake, must receive confirmation from server for quit
+            if (readMessage().contains("QUIT")) {
+                input.close();
+                out.close();
+                socket.close();
+            }
+
+        } catch (IOException i) {
+            // System.out.println(i);
+        }
+
+        // Exit the program
+        System.exit(1);
+    }
+
+    // Sends all jobs to largest server
+    // private String AllToLargest(String job, Server s){
+    // String[] strSplit = job.split("\\s+");
+    // return "SCHD " + strSplit[2] + "" + s.getType() + "" + (s.getLimit()-1);
+    // }
+
+    // Finds the largest server; counts through cores until largest is found then
+    // returns largest
+    private int findLargestServer(ArrayList<Server> s) {
+        int largest = 0;
+        for (int i = 0; i < s.size(); i++) {
+            if (s.get(i).getCores() > largest) {
+                largest = i;
+            }
+        }
+        return largest;
+    }
+
+    // Send message to server
+    private void sendMessage(String outStr) {
+        byte[] byteMsg = outStr.getBytes();
+        try {
+            out.write(byteMsg);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        // Display output from client
+    //    System.out.println("OUT: " + outStr);
+    }
+
+    // Read message from server
+    private String readMessage() {
+        String inStr = "";
+        char[] cbuf = new char[Short.MAX_VALUE * 2];
+        try {
+            in.read(cbuf);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        inStr = new String(cbuf, 0, cbuf.length);
+
+        // Display input from server
+    //    System.out.println("INC: " + inStr);
+
+        return inStr;
+    }
+
+    public ArrayList<Server> addServer(String s) {
+
+        // remove trailing spaces
+        s = s.trim();
+
+        // temp arrayList to be passed back
+        ArrayList<Server> newList = new ArrayList<Server>();
+
+        // split strings by newline
+        String[] lines = s.split("\\r?\\n");
+
+        for (String line : lines) {
+
+            // split each line by white space
+            String[] splitStr = line.split("\\s+");
+
+            // server type server ID state curStart Time core count memory disk wJobs rJobs
+            Server server = new Server(splitStr[0], Integer.parseInt(splitStr[1]), splitStr[2],
+                    Integer.parseInt(splitStr[3]), Integer.parseInt(splitStr[4]), Integer.parseInt(splitStr[5]),
+                    Integer.parseInt(splitStr[6]), Integer.parseInt(splitStr[7]), Integer.parseInt(splitStr[8]));
+            newList.add(server);
+        }
+
+        return newList;
+    }
+
+    //
+    // create a new job object
+    //
+    public Job addJob(String job) {
+
+        // remove trailing spaces
+        job = job.trim();
+
+        // split string up by white space; "\\s+" is a regex expression
+        String[] splitStr = job.split("\\s+");
+
+        Job j = new Job(Integer.parseInt(splitStr[1]), Integer.parseInt(splitStr[2]), Integer.parseInt(splitStr[3]),
+                Integer.parseInt(splitStr[4]), Integer.parseInt(splitStr[5]), Integer.parseInt(splitStr[6]));
+
+        // returns job object to fill arrayList
+        return j;
+    }
+
+    public String getsCapable(Job j) {
+
+        // grab info from job inputted job object
+        return ("GETS Capable " + j.getCoreReq() + " " + j.getMemoryReq() + " " + j.getDiskReq());
+    }
+
+    // public String lowCost(ArrayList<Server> servers, ArrayList<Job> job){
+
+	// 	// Server information string
+	// 	String ServerInfo = "";
+
+	// 	for (Server server: servers) {
+
+	// 		// find best fit for job
+	// 		if (server.getDisk() >= job.get(0).getDiskReq() &&
+	// 			server.getCores() >= job.get(0).getCoreReq() &&
+	// 			server.getMemory() >= job.get(0).getMemoryReq() &&
+	// 			// Ensure start time is greater than runnning time
+	// 			job.get(0).getStartTime() >= job.get(0).getRunTime()) {
+
+	// 				// Ensure the server is already active or idle to reduce cost
+	// 				ServerInfo = server.getType() + " " + server.getID();
+	// 				return "SCHD " + job.get(0).getID() + " " + ServerInfo;
+	// 		}
+	// 		// When there is no optimal server, just use first server.
+	// 		else {
+	// 			// Send job to first server
+	// 			ServerInfo = servers.get(0).getType() + " " + servers.get(0).getID();
+	// 		}
+	// 	}
+	// 	// There is only one job in queue so schedule it
+	// 	return "SCHD " + job.get(0).getID() + " " + ServerInfo;
+	// }
+
+    public static Server getOptimalServer(ArrayList<Server> servers, Job job) {
+        Server optimalServer = servers.get(0);                                  // initialise optimal server to be the first element of servers
+        int lowestFitnessValue = servers.get(0).getCores() - job.getCoreReq();      // initialise the lowest fitness value to the fitness value of the first server
+
+        for(Server s : servers) {                                               // iterate through every server
+            int fitnessValue = s.getCores() - job.getCoreReq();                    // find current fitnessValue
+
+            // the optimal server will be the one with
+            // the lowest possible fitness value
+            // AND lowest possible waiting jobs
+             if(lowestFitnessValue < 0 ||
+                     (fitnessValue < lowestFitnessValue &&
+               (s.getWaitTime() < optimalServer.getWaitTime()))) {
+                        lowestFitnessValue = fitnessValue;
+                        optimalServer = s;
+            }
+        }
+
+        return optimalServer;
+    }
+
+    // Establishes connection to initiate handhsake
+    private static void connect(String address, int port) {
+        double secondsToWait = 1;
+        int tryNum = 1;
+        while (true) {
+            try {
+            //    System.out.println("Connecting to server at: " + address + ":" + port);
+                socket = new Socket(address, port);
+            //    System.out.println("Connected");
+                break;
+            } catch (IOException e) {
+                secondsToWait = Math.min(30, Math.pow(2, tryNum));
+                tryNum++;
+            //    System.out.println("Connection timed out, retrying in  " + (int) secondsToWait + " seconds ...");
+                try {
+                    TimeUnit.SECONDS.sleep((long) secondsToWait);
+                } catch (InterruptedException ie) {
+                    ie.printStackTrace();
+                }
+            }
         }
     }
+
+    public static void main(String args[]) throws IOException {
+        Client client = new Client("127.0.0.1", 50000);
+        client.start();
+    }
+
 }
