@@ -32,10 +32,10 @@ public class Client {
         // handshake completed
         boolean connected = true;
 
-        // populate arrayList of server objects from:
+        //  arrayList of server objects from:
         ArrayList<Server> servers = new ArrayList<Server>();
 
-        // arrayList for holding job info from "GETS Capable"
+        // arrayList for jobs
         ArrayList<Job> jobs = new ArrayList<Job>();
 
         // Tells client it is ready to recieve commands
@@ -157,19 +157,13 @@ public class Client {
     }
 
     public ArrayList<Server> parseServer(String s) {
-
-        // remove trailing spaces
         s = s.trim();
 
-        // temp arrayList to be passed back
         ArrayList<Server> List = new ArrayList<Server>();
 
-        // split strings by newline
         String[] lines = s.split("\\r?\\n");
 
         for (String line : lines) {
-
-            // split each line by white space
             String[] splitStr = line.split("\\s+");
 
             // server type server ID state curStart Time core count memory disk wJobs rJobs
@@ -183,53 +177,48 @@ public class Client {
     }
 
     //
-    // create a new job object
+    // create a new job 
     //
     public Job parseJob(String job) {
-
-        // remove trailing spaces
         job = job.trim();
-
-        // split string up by white space; "\\s+" is a regex expression
         String[] splitStr = job.split("\\s+");
 
         Job j = new Job(Integer.parseInt(splitStr[1]), Integer.parseInt(splitStr[2]), Integer.parseInt(splitStr[3]),
                 Integer.parseInt(splitStr[4]), Integer.parseInt(splitStr[5]), Integer.parseInt(splitStr[6]));
 
-        // returns job object to fill arrayList
+        // returns job object to  arrayList
         return j;
     }
 
+    //Function for finding capable server
     public String getCapable(Job j) {
-
-        // grab info from job inputted job object
         return ("GETS Capable " + j.getCoreReq() + " " + j.getMemoryReq() + " " + j.getDiskReq());
     }
 
     public String customAlgorithm (ArrayList<Server> servers, ArrayList<Job> job){
 
-		// Server information string
-		String ServerInfo = "";
+		//  information string
+		String Info = "";
 
-		for (Server server: servers) {
-            int coreReq =  server.getCores() - job.get(0).getCoreReq();
+        //Looping through serverss
+		for (Server s: servers) {
+        //    int coreReq =  s.getCores() - job.get(0).getCoreReq();
 			// find best fit for job
-			if (// server.getDisk() >= job.get(0).getDiskReq() &&
-				server.getCores() >= job.get(0).getCoreReq() &&
-			//	server.getMemory() >= job.get(0).getMemoryReq()){ 
+			if (
+				s.getCores() >= job.get(0).getCoreReq() &&			 
 				 job.get(0).getStartTime() >= job.get(0).getRunTime()) {
 					// Ensure the server is already active or idle to reduce cost
-					ServerInfo = server.getType() + " " + server.getID();
-					return "SCHD " + job.get(0).getID() + " " + ServerInfo;
+					Info = s.getType() + " " + s.getID();
+					return "SCHD " + job.get(0).getID() + " " + Info;
 			}
-			// When there is no optimal server, just use first server.
+			// just use first server if can't find best server.
 			else {
 				// Send job to first server
-				ServerInfo = servers.get(0).getType() + " " + servers.get(0).getID();
+				Info = servers.get(0).getType() + " " + servers.get(0).getID();
 			}
 		}
 		// There is only one job in queue so schedule it
-		return "SCHD " + job.get(0).getID() + " " + ServerInfo;
+		return "SCHD " + job.get(0).getID() + " " + Info;
 	}
 
 
