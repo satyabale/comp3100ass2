@@ -65,23 +65,23 @@ public class Client {
 
                 // we have a JOB incoming, so we create a job objet based on it
                 if (msg.contains("JOBN")) {
-                    jobs.add(addJob(msg)); // create job
+                    jobs.add(parseJob(msg)); // create job
 
                     // the job arrayList will only ever have 1 item in it at a time...
-                    sendMessage(getsCapable(jobs.get(0))); // GETS Capable called
+                    sendMessage(getCapable(jobs.get(0))); // GETS Capable called
                     msg = readMessage();
 
                     sendMessage("OK");
 
                     // list of capable servers are added to arrayList of server objects
                     msg = readMessage();
-                    servers = addServer(msg);
+                    servers = parseServer(msg);
                     sendMessage("OK");
 
                     // we should receive a "." here
                     msg = readMessage();
 
-                    sendMessage(lowCost(servers, jobs)); // Scheduling algorithm called here
+                    sendMessage(customAlgorithm (servers, jobs)); // Scheduling algorithm called here
                     msg = readMessage();
 
                     // only need one job at a time
@@ -156,13 +156,13 @@ public class Client {
         return inStr;
     }
 
-    public ArrayList<Server> addServer(String s) {
+    public ArrayList<Server> parseServer(String s) {
 
         // remove trailing spaces
         s = s.trim();
 
         // temp arrayList to be passed back
-        ArrayList<Server> newList = new ArrayList<Server>();
+        ArrayList<Server> List = new ArrayList<Server>();
 
         // split strings by newline
         String[] lines = s.split("\\r?\\n");
@@ -176,16 +176,16 @@ public class Client {
             Server server = new Server(splitStr[0], Integer.parseInt(splitStr[1]), splitStr[2],
                     Integer.parseInt(splitStr[3]), Integer.parseInt(splitStr[4]), Integer.parseInt(splitStr[5]),
                     Integer.parseInt(splitStr[6]), Integer.parseInt(splitStr[7]), Integer.parseInt(splitStr[8]));
-            newList.add(server);
+            List.add(server);
         }
 
-        return newList;
+        return List;
     }
 
     //
     // create a new job object
     //
-    public Job addJob(String job) {
+    public Job parseJob(String job) {
 
         // remove trailing spaces
         job = job.trim();
@@ -200,13 +200,13 @@ public class Client {
         return j;
     }
 
-    public String getsCapable(Job j) {
+    public String getCapable(Job j) {
 
         // grab info from job inputted job object
         return ("GETS Capable " + j.getCoreReq() + " " + j.getMemoryReq() + " " + j.getDiskReq());
     }
 
-    public String lowCost(ArrayList<Server> servers, ArrayList<Job> job){
+    public String customAlgorithm (ArrayList<Server> servers, ArrayList<Job> job){
 
 		// Server information string
 		String ServerInfo = "";
@@ -216,8 +216,8 @@ public class Client {
 			// find best fit for job
 			if (// server.getDisk() >= job.get(0).getDiskReq() &&
 				server.getCores() >= job.get(0).getCoreReq() &&
-				server.getMemory() >= job.get(0).getMemoryReq()){ 
-			//	 job.get(0).getStartTime() >= job.get(0).getRunTime()) {
+			//	server.getMemory() >= job.get(0).getMemoryReq()){ 
+				 job.get(0).getStartTime() >= job.get(0).getRunTime()) {
 					// Ensure the server is already active or idle to reduce cost
 					ServerInfo = server.getType() + " " + server.getID();
 					return "SCHD " + job.get(0).getID() + " " + ServerInfo;
